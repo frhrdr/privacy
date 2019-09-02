@@ -57,15 +57,25 @@ else:
 
 class Flags_dummy():
 
+  # def __init__(self):
+  #   self.dpsgd = True
+  #   self.learning_rate = .25  # .15
+  #   self.noise_multiplier = 1.3
+  #   self.l2_norm_clip = 1.5
+  #   self.batch_size = 256
+  #   self.epochs = 15
+  #   self.microbatches = 256
+  #   self.model_dir = 'models_fmnist/private_lr025'
+
   def __init__(self):
-    self.dpsgd = True
+    self.dpsgd = False
     self.learning_rate = .25  # .15
     self.noise_multiplier = 1.3
     self.l2_norm_clip = 1.5
     self.batch_size = 256
     self.epochs = 15
     self.microbatches = 256
-    self.model_dir = 'models_fmnist/private_lr025'
+    self.model_dir = 'models_fmnist/nonprivate_lr025'
 
 FLAGS = Flags_dummy()
 
@@ -208,7 +218,7 @@ def load_fmnist():
 
 
 def main(unused_argv):
-  tf.logging.set_verbosity(tf.logging.INFO)
+  tf.logging.set_verbosity(tf.logging.ERROR)
   if FLAGS.dpsgd and FLAGS.batch_size % FLAGS.microbatches != 0:
     raise ValueError('Number of microbatches should divide evenly batch_size')
 
@@ -244,6 +254,7 @@ def main(unused_argv):
     eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
     test_accuracy = eval_results['accuracy']
     print('Test accuracy after %d epochs is: %.3f' % (epoch, test_accuracy))
+
 
 
 if __name__ == '__main__':

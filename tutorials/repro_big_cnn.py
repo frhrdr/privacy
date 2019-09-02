@@ -22,7 +22,8 @@ from __future__ import print_function
 # from absl import flags
 
 from distutils.version import LooseVersion
-
+import os
+import argparse
 import numpy as np
 import tensorflow as tf
 
@@ -30,6 +31,7 @@ from privacy.analysis import privacy_ledger
 from privacy.analysis.rdp_accountant import compute_rdp_from_ledger
 from privacy.analysis.rdp_accountant import get_privacy_spent
 from privacy.optimizers import dp_optimizer
+
 
 if LooseVersion(tf.__version__) < LooseVersion('2.0.0'):
   GradientDescentOptimizer = tf.train.GradientDescentOptimizer
@@ -55,20 +57,23 @@ else:
 # flags.DEFINE_string('model_dir', None, 'Model directory')
 
 
-class FlagsDummy:
+def parse_arguments():
+  parser = argparse.ArgumentParser()
 
-  def __init__(self):
-    self.dpsgd = True
-    self.learning_rate = .25  # .15
-    self.noise_multiplier = 1.3
-    self.l2_norm_clip = 1.5
-    self.batch_size = 256
-    self.epochs = 15
-    self.microbatches = 4
-    self.model_dir = 'models_fmnist/big_cnn_same_settings_lr025'
+  parser.add_argument('--dpsgd', action='store_true', default=False)
+  parser.add_argument('--learning-rate', '-lr', type=float, default=0.2)
+  parser.add_argument('--noise-multiplier', type=float, default=1.3)
+  parser.add_argument('--l2-norm-clip', type=float, default=1.5)
+
+  parser.add_argument('--batch-size', '-bs', type=int, default=256)
+  parser.add_argument('--epochs', '-ep', type=int, default=15)
+  parser.add_argument('--microbatches', type=int, default=256)
+
+  parser.add_argument('--model-dir', type=str, default=None)  # run id for logging
+  return parser.parse_args()
 
 
-FLAGS = FlagsDummy()
+FLAGS = parse_arguments()
 
 
 class EpsilonPrintingTrainingHook(tf.estimator.SessionRunHook):
@@ -98,12 +103,10 @@ def cnn_model_fn(features, labels, mode):
   # Define CNN architecture using tf.keras.layers.
   input_layer = tf.reshape(features['x'], [-1, 28, 28, 1])
   y = tf.keras.layers.Conv2D(20, 5,
-                             # strides=2,
                              padding='valid',
                              activation='relu').apply(input_layer)
   y = tf.keras.layers.MaxPool2D(2, 2).apply(y)
   y = tf.keras.layers.Conv2D(50, 5,
-                             # strides=2,
                              padding='valid',
                              activation='relu').apply(y)
   y = tf.keras.layers.MaxPool2D(2, 2).apply(y)
@@ -112,10 +115,10 @@ def cnn_model_fn(features, labels, mode):
   # with tf.control_dependencies([print_op1]):  # yup! it's 800
   y = tf.keras.layers.Dense(500, activation='relu').apply(y)
   logits = tf.keras.layers.Dense(10).apply(y)
-
+  # print_op1 = tf.print(tf.argmax(logits[:5, :], axis=1))
+  # with tf.control_dependencies([print_op1]):
   # Calculate loss as a vector (to support microbatches in DP-SGD).
-  vector_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-      labels=labels, logits=logits)
+  vector_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits)
   # Define mean of loss across minibatch (for reporting through tf.Estimator).
   scalar_loss = tf.reduce_mean(vector_loss)
 
@@ -211,8 +214,8 @@ def load_fmnist():
   return train_data, train_labels, test_data, test_labels
 
 
-def main(unused_argv):
-  tf.logging.set_verbosity(tf.logging.INFO)
+def main():
+  tf.logging.set_verbosity(tf.logging.ERROR)
   if FLAGS.dpsgd and FLAGS.batch_size % FLAGS.microbatches != 0:
     raise ValueError('Number of microbatches should divide evenly batch_size')
 
@@ -239,6 +242,7 @@ def main(unused_argv):
       shuffle=False)
 
   # Training loop.
+  test_accs = []
   steps_per_epoch = 60000 // FLAGS.batch_size
   for epoch in range(1, FLAGS.epochs + 1):
     # Train the model for one epoch.
@@ -248,8 +252,13 @@ def main(unused_argv):
     eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
     test_accuracy = eval_results['accuracy']
     print('Test accuracy after %d epochs is: %.3f' % (epoch, test_accuracy))
+    test_accs.append(test_accuracy)
+
+  if FLAGS.model_dir is not None:
+    print('writing accuracies to file', test_accs)
+    np.save(os.path.join(FLAGS.model_dir, 'test_accuracies.npy'), np.asarray(test_accs))
 
 
 if __name__ == '__main__':
   # app.run(main)
-  main(None)
+  main()
