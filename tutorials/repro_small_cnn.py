@@ -22,7 +22,7 @@ from __future__ import print_function
 # from absl import flags
 
 from distutils.version import LooseVersion
-
+import argparse
 import numpy as np
 import tensorflow as tf
 
@@ -55,29 +55,23 @@ else:
 # flags.DEFINE_string('model_dir', None, 'Model directory')
 
 
-class Flags_dummy():
+def parse_arguments():
+  parser = argparse.ArgumentParser()
 
-  # def __init__(self):
-  #   self.dpsgd = True
-  #   self.learning_rate = .25  # .15
-  #   self.noise_multiplier = 1.3
-  #   self.l2_norm_clip = 1.5
-  #   self.batch_size = 256
-  #   self.epochs = 15
-  #   self.microbatches = 256
-  #   self.model_dir = 'models_fmnist/private_lr025'
+  parser.add_argument('--dpsgd', action='store_true', default=False)
+  parser.add_argument('--learning-rate', '-lr', type=float, default=0.15)
+  parser.add_argument('--noise-multiplier', type=float, default=1.)
+  parser.add_argument('--l2-norm-clip', type=float, default=1.5)
+  parser.add_argument('--batch-size', '-bs', type=int, default=256)
+  parser.add_argument('--epochs', '-ep', type=int, default=17)
+  parser.add_argument('--microbatches', type=int, default=256)
 
-  def __init__(self):
-    self.dpsgd = False
-    self.learning_rate = .25  # .15
-    self.noise_multiplier = 1.3
-    self.l2_norm_clip = 1.5
-    self.batch_size = 256
-    self.epochs = 15
-    self.microbatches = 256
-    self.model_dir = 'models_fmnist/nonprivate_lr025'
+  parser.add_argument('--model-dir', type=str, default=None)  # run id for logging
+  return parser.parse_args()
 
-FLAGS = Flags_dummy()
+
+FLAGS = parse_arguments()
+
 
 class EpsilonPrintingTrainingHook(tf.estimator.SessionRunHook):
   """Training hook to print current value of epsilon after an epoch."""
@@ -217,7 +211,7 @@ def load_fmnist():
   return train_data, train_labels, test_data, test_labels
 
 
-def main(unused_argv):
+def main():
   tf.logging.set_verbosity(tf.logging.ERROR)
   if FLAGS.dpsgd and FLAGS.batch_size % FLAGS.microbatches != 0:
     raise ValueError('Number of microbatches should divide evenly batch_size')
@@ -259,4 +253,4 @@ def main(unused_argv):
 
 if __name__ == '__main__':
   # app.run(main)
-  main(None)
+  main()
